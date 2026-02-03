@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pomodoro Timer</title>
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --focus:#ff6b6b;
+      --break:#4ade80;
+      --text:#e6eef8;
+      --muted:#9fb0c8;
+    }
+    *{box-sizing:border-box;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071028 0%, #0b1220 100%);color:var(--text);display:grid;place-items:center;}
+    .card{width:360px;padding:28px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));box-shadow:0 8px 30px rgba(2,6,23,0.7);border:1px solid rgba(255,255,255,0.03);}
+    .title{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    .title h1{font-size:18px;margin:0;font-weight:600;letter-spacing:0.2px}
+    .mode-btns{display:flex;gap:8px}
+    .mode-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:6px 10px;border-radius:8px;color:var(--muted);cursor:pointer;font-size:13px}
+    .mode-btn.active{color:var(--text);border-color:rgba(255,255,255,0.06)}
+    .timer{display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px 12px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);margin-bottom:18px}
+    .time{font-size:56px;font-weight:700;letter-spacing:2px}
+    .label{font-size:13px;color:var(--muted)}
+    .controls{display:flex;gap:10px;justify-content:center}
+    .btn{padding:10px 16px;border-radius:10px;border:0;cursor:pointer;font-weight:600;color:#04263a;background:#e6eef8;margin:0}
+    .btn.secondary{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,0.05)}
+    .status{margin-top:10px;text-align:center;color:var(--muted);font-size:13px}
+    .focus-theme{box-shadow:0 6px 20px rgba(255,107,107,0.12);border-left:6px solid var(--focus)}
+    .break-theme{box-shadow:0 6px 20px rgba(74,222,128,0.08);border-left:6px solid var(--break)}
+    footer{margin-top:12px;text-align:center;color:var(--muted);font-size:12px}
+    @media (max-width:420px){.card{width:95%}}
+  </style>
+</head>
+<body>
+  <div class="card focus-theme" id="card">
+    <div class="title">
+      <h1>Pomodoro 타이머</h1>
+      <div class="mode-btns">
+        <button class="mode-btn active" id="mode-focus">25:00 집중</button>
+        <button class="mode-btn" id="mode-break">5:00 휴식</button>
+      </div>
+    </div>
+
+    <div class="timer" id="timerWrap">
+      <div class="time" id="time">25:00</div>
+      <div class="label" id="modeLabel">상태: 집중</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="startBtn">시작</button>
+      <button class="btn secondary" id="pauseBtn">일시정지</button>
+      <button class="btn secondary" id="resetBtn">리셋</button>
+    </div>
+
+    <div class="status" id="statusText">준비됨</div>
+    <footer>자동 전환 시 알림 및 소리 재생</footer>
+  </div>
+
+  <script>
+    // 설정 (초 단위)
+    const FOCUS_TIME = 25 * 60;
+    const BREAK_TIME = 5 * 60;
+
+    // 상태
+    let mode = 'focus'; // 'focus' | 'break'
+    let remaining = FOCUS_TIME;
+    let timerId = null;
+    let running = false;
+
+    // DOM
+    const timeEl = document.getElementById('time');
+    const modeLabel = document.getElementById('modeLabel');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const modeFocusBtn = document.getElementById('mode-focus');
+    const modeBreakBtn = document.getElementById('mode-break');
+    const statusText = document.getElementById('statusText');
+    const card = document.getElementById('card');
+
+    // 포맷
+    function formatTime(sec){
+      const m = Math.floor(sec/60).toString().padStart(2,'0');
+      const s = (sec%60).toString().padStart(2,'0');
+      return `${m}:${s}`;
+    }
+
+    function updateUI(){
+      timeEl.textContent = formatTime(remaining);
+      modeLabel.textContent = `상태: ${mode === 'focus' ? '집중' : '휴식'}`;
+      if(mode === 'focus'){
+        modeFocusBtn.classList.add('active');
+        modeBreakBtn.classList.remove('active');
+        card.classList.remove('break-theme');
+        card.classList.add('focus-theme');
+      } else {
+        modeFocusBtn.classList.remove('active');
+        modeBreakBtn.classList.add('active');
+        card.classList.remove('focus-theme');
+        card.classList.add('break-theme');
+      }
+      statusText.textContent = running ? '타이머 작동 중' : '일시정지 또는 준비됨';
+    }
+
+    function tick(){
+      if(remaining > 0){
+        remaining--;
+        updateUI();
+      } else {
+        onPeriodEnd();
+      }
+    }
+
+    function startTimer(){
+      if(running) return;
+      running = true;
+      timerId = setInterval(tick, 1000);
+      updateUI();
+    }
+
+    function pauseTimer(){
+      running = false;
+      if(timerId) clearInterval(timerId);
+      timerId = null;
+      updateUI();
+    }
+
+    function resetTimer(){
+      pauseTimer();
+      remaining = (mode === 'focus') ? FOCUS_TIME : BREAK_TIME;
+      updateUI();
+    }
+
+    function switchMode(newMode){
+      mode = newMode;
+      remaining = (mode === 'focus') ? FOCUS_TIME : BREAK_TIME;
+      pauseTimer();
+      updateUI();
+    }
+
+    function notifyAndBeep(title, body){
+      // 데스크탑 알림
+      if("Notification" in window){
+        if(Notification.permission === "granted"){
+          new Notification(title, {body});
+        } else if(Notification.permission !== "denied"){
+          Notification.requestPermission().then(p => {
+            if(p === "granted") new Notification(title, {body});
+          });
+        }
+      }
+      // 간단한 비프
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.value = 880;
+        o.connect(g);
+        g.connect(ctx.destination);
+        g.gain.value = 0.0001;
+        g.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02);
+        o.start();
+        g.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.8);
+        o.stop(ctx.currentTime + 0.85);
+      } catch(e){}
+    }
+
+    function onPeriodEnd(){
+      pauseTimer();
+      const finished = mode === 'focus' ? '집중 완료!' : '휴식 완료!';
+      const nextMode = mode === 'focus' ? '휴식' : '집중';
+      notifyAndBeep(finished, `${nextMode} 시간으로 전환됩니다. 리셋 또는 시작하세요.`);
+      // 자동으로 모드 전환하되 자동 시작하지 않고 대기 상태로 둡니다.
+      mode = (mode === 'focus') ? 'break' : 'focus';
+      remaining = (mode === 'focus') ? FOCUS_TIME : BREAK_TIME;
+      updateUI();
+    }
+
+    // 버튼 이벤트
+    startBtn.addEventListener('click', () => {
+      startTimer();
+    });
+    pauseBtn.addEventListener('click', () => {
+      pauseTimer();
+    });
+    resetBtn.addEventListener('click', () => {
+      resetTimer();
+    });
+
+    modeFocusBtn.addEventListener('click', () => switchMode('focus'));
+    modeBreakBtn.addEventListener('click', () => switchMode('break'));
+
+    // 키보드 단축키 (s: start, p: pause, r: reset)
+    document.addEventListener('keydown', (e) => {
+      if(e.key === 's') startTimer();
+      if(e.key === 'p') pauseTimer();
+      if(e.key === 'r') resetTimer();
+    });
+
+    // 초기 UI
+    updateUI();
+  </script>
+</body>
+</html>
